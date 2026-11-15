@@ -1,0 +1,25 @@
+SMARTSHELF AI v4 — Mobile-friendly web version
+
+This version improves the layout for phone and tablet screens. It works in a browser on both iPhone and Android.
+
+IMPORTANT:
+- This is a responsive web app, not a native iOS/Android app.
+- To open it on a phone over the internet, it must be deployed to a hosting service with HTTPS.
+- For a quick local test, phone and computer must be on the same Wi-Fi and Streamlit must be started with:
+  streamlit run app.py --server.address 0.0.0.0
+  Then open the computer's local network IP and Streamlit port 8501 on the phone.
+- Do not share private or real store data publicly. Use demo data for the hackathon unless you have permission.
+
+Install-like shortcut:
+- iPhone: open the deployed HTTPS site in Safari -> Share -> Add to Home Screen.
+- Android: open the deployed HTTPS site in Chrome -> menu -> Add to Home screen / Install app (wording may vary).
+
+Run on Windows:
+1. Open this folder in VS Code.
+2. Activate the venv, if present; otherwise create one:
+   python -m venv venv
+   .\venv\Scripts\Activate.ps1
+3. Install packages:
+   pip install -r requirements.txt
+4. Run:
+   streamlit run app.py

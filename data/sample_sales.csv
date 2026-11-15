@@ -1,0 +1,26 @@
+date,product,category,size,color,units_sold,stock,price,cost
+2026-11-01,Classic Tee,Tops,S,Black,8,22,89900,42000
+2026-11-02,Classic Tee,Tops,S,Black,6,22,89900,42000
+2026-11-03,Classic Tee,Tops,S,Black,7,15,89900,42000
+2026-11-04,Classic Tee,Tops,S,Black,9,15,89900,42000
+2026-11-05,Classic Tee,Tops,S,Black,8,7,89900,42000
+2026-11-01,Classic Tee,Tops,M,White,10,28,89900,42000
+2026-11-02,Classic Tee,Tops,M,White,9,28,89900,42000
+2026-11-03,Classic Tee,Tops,M,White,11,18,89900,42000
+2026-11-04,Classic Tee,Tops,M,White,8,18,89900,42000
+2026-11-05,Classic Tee,Tops,M,White,12,6,89900,42000
+2026-11-01,Urban Hoodie,Hoodies,M,Grey,4,30,249900,125000
+2026-11-02,Urban Hoodie,Hoodies,M,Grey,5,30,249900,125000
+2026-11-03,Urban Hoodie,Hoodies,M,Grey,4,26,249900,125000
+2026-11-04,Urban Hoodie,Hoodies,M,Grey,6,26,249900,125000
+2026-11-05,Urban Hoodie,Hoodies,M,Grey,5,21,249900,125000
+2026-11-01,Wide Jeans,Jeans,L,Blue,7,25,299900,155000
+2026-11-02,Wide Jeans,Jeans,L,Blue,8,25,299900,155000
+2026-11-03,Wide Jeans,Jeans,L,Blue,9,17,299900,155000
+2026-11-04,Wide Jeans,Jeans,L,Blue,8,17,299900,155000
+2026-11-05,Wide Jeans,Jeans,L,Blue,10,9,299900,155000
+2026-11-01,Soft Shirt,Shirts,M,Beige,3,24,179900,85000
+2026-11-02,Soft Shirt,Shirts,M,Beige,4,24,179900,85000
+2026-11-03,Soft Shirt,Shirts,M,Beige,3,21,179900,85000
+2026-11-04,Soft Shirt,Shirts,M,Beige,4,21,179900,85000
+2026-11-05,Soft Shirt,Shirts,M,Beige,5,17,179900,85000

@@ -88,9 +88,10 @@ c2.metric("Units sold", f"{units:,.0f}")
 c3.metric("Estimated gross profit", f"{profit:,.0f}")
 c4.metric("Products", f"{df['product'].nunique()}")
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "Overview", "Demand Forecast", "Size Intelligence",
-    "Color Intelligence", "Smart Replenishment", "Business Advisor"
+    "Color Intelligence", "Smart Replenishment", "Business Advisor",
+    "Profit Intelligence"
 ])
 
 with tab1:
@@ -263,6 +264,74 @@ with tab6:
         "not a connected generative-AI model or a trained machine-learning model. The included sample data is synthetic. "
         "Treat recommendations as prompts for review, not automatic purchasing decisions."
     )
+
+
+with tab7:
+    st.subheader("Profit Intelligence")
+    st.caption("Understand where sales revenue turns into gross profit using the uploaded data.")
+
+    profit_df = df.copy()
+    total_cost = (profit_df["units_sold"] * profit_df["cost"]).sum()
+    total_profit = profit_df["gross_profit"].sum()
+    margin_pct = total_profit / total_revenue * 100 if total_revenue else 0
+    profit_per_unit = total_profit / units if units else 0
+
+    p1, p2, p3, p4 = st.columns(4)
+    p1.metric("Gross profit", f"{total_profit:,.0f}")
+    p2.metric("Cost of goods sold", f"{total_cost:,.0f}")
+    p3.metric("Gross margin", f"{margin_pct:.1f}%")
+    p4.metric("Profit per unit", f"{profit_per_unit:,.0f}")
+
+    st.markdown("### Profit by category")
+    category_profit = profit_df.groupby("category", as_index=False).agg(
+        revenue=("revenue", "sum"),
+        gross_profit=("gross_profit", "sum"),
+        units=("units_sold", "sum")
+    )
+    category_cost = profit_df.assign(cogs=profit_df["units_sold"] * profit_df["cost"]).groupby(
+        "category", as_index=False
+    )["cogs"].sum()
+    category_profit = category_profit.merge(category_cost, on="category", how="left")
+    category_profit["gross_margin_pct"] = np.where(
+        category_profit["revenue"] > 0,
+        category_profit["gross_profit"] / category_profit["revenue"] * 100, 0
+    )
+    st.plotly_chart(px.bar(category_profit, x="category", y="gross_profit",
+                           title="Gross profit by category"), use_container_width=True)
+    st.dataframe(category_profit.rename(columns={
+        "category": "Category", "revenue": "Revenue", "cogs": "Cost of goods sold",
+        "gross_profit": "Gross profit", "gross_margin_pct": "Gross margin (%)",
+        "units": "Units sold"
+    }).round(2), use_container_width=True)
+
+    st.markdown("### Product profitability")
+    product_profit = profit_df.groupby(["product", "category"], as_index=False).agg(
+        revenue=("revenue", "sum"),
+        gross_profit=("gross_profit", "sum"),
+        units=("units_sold", "sum")
+    )
+    product_cost = profit_df.assign(cogs=profit_df["units_sold"] * profit_df["cost"]).groupby(
+        ["product", "category"], as_index=False
+    )["cogs"].sum()
+    product_profit = product_profit.merge(product_cost, on=["product", "category"], how="left")
+    product_profit["gross_margin_pct"] = np.where(
+        product_profit["revenue"] > 0,
+        product_profit["gross_profit"] / product_profit["revenue"] * 100, 0
+    )
+    product_profit = product_profit.sort_values("gross_profit", ascending=False)
+    st.plotly_chart(px.bar(product_profit.head(10), x="product", y="gross_profit",
+                           title="Top products by gross profit"), use_container_width=True)
+    st.dataframe(product_profit.rename(columns={
+        "product": "Product", "category": "Category", "revenue": "Revenue",
+        "cogs": "Cost of goods sold", "gross_profit": "Gross profit",
+        "gross_margin_pct": "Gross margin (%)", "units": "Units sold"
+    }).round(2), use_container_width=True)
+
+    st.download_button("Download profitability report (CSV)",
+        data=product_profit.to_csv(index=False).encode("utf-8-sig"),
+        file_name="smartshelf_profitability_report.csv", mime="text/csv")
+    st.info("Gross profit is revenue minus recorded product cost. It excludes rent, salaries, taxes, delivery "
+            "and other operating expenses. Results depend on accurate price and cost data.")
 
 with st.expander("Data preview and definitions"):
     st.dataframe(df, use_container_width=True)

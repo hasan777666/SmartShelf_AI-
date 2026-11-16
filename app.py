@@ -88,10 +88,10 @@ c2.metric("Units sold", f"{units:,.0f}")
 c3.metric("Estimated gross profit", f"{profit:,.0f}")
 c4.metric("Products", f"{df['product'].nunique()}")
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "Overview", "Demand Forecast", "Size Intelligence",
     "Color Intelligence", "Smart Replenishment", "Business Advisor",
-    "Profit Intelligence"
+    "Profit Intelligence", "Sales Intelligence", "AI Assistant"
 ])
 
 with tab1:
@@ -332,6 +332,202 @@ with tab7:
         file_name="smartshelf_profitability_report.csv", mime="text/csv")
     st.info("Gross profit is revenue minus recorded product cost. It excludes rent, salaries, taxes, delivery "
             "and other operating expenses. Results depend on accurate price and cost data.")
+
+
+with tab8:
+    st.subheader("Sales Intelligence")
+    st.caption("Compare recorded sales dates, identify leading products and review sales trends.")
+
+    daily_sales = df.groupby(df["date"].dt.date, as_index=False).agg(
+        revenue=("revenue", "sum"),
+        units=("units_sold", "sum")
+    ).sort_values("date")
+
+    if len(daily_sales) >= 2:
+        latest_day = daily_sales.iloc[-1]
+        previous_day = daily_sales.iloc[-2]
+        revenue_change = (
+            (latest_day["revenue"] - previous_day["revenue"]) / previous_day["revenue"] * 100
+            if previous_day["revenue"] else 0
+        )
+        units_change = (
+            (latest_day["units"] - previous_day["units"]) / previous_day["units"] * 100
+            if previous_day["units"] else 0
+        )
+        s1, s2, s3, s4 = st.columns(4)
+        s1.metric("Latest recorded date", str(latest_day["date"]))
+        s2.metric("Latest-day revenue", f"{latest_day['revenue']:,.0f}",
+                  f"{revenue_change:+.1f}% vs previous recorded date")
+        s3.metric("Latest-day units", f"{latest_day['units']:,.0f}",
+                  f"{units_change:+.1f}% vs previous recorded date")
+        s4.metric("Recorded sales dates", f"{len(daily_sales)}")
+    else:
+        st.info("At least two distinct sales dates are needed for a day-to-day comparison.")
+
+    st.markdown("### Revenue and units trend")
+    metric_choice = st.selectbox("Trend metric", ["Revenue", "Units sold"], key="sales_trend_metric")
+    trend_col = "revenue" if metric_choice == "Revenue" else "units"
+    st.plotly_chart(
+        px.line(daily_sales, x="date", y=trend_col, markers=True,
+                title=f"{metric_choice} by recorded date"),
+        use_container_width=True
+    )
+
+    st.markdown("### Product performance")
+    product_perf = df.groupby(["product", "category"], as_index=False).agg(
+        units=("units_sold", "sum"),
+        revenue=("revenue", "sum"),
+        gross_profit=("gross_profit", "sum")
+    ).sort_values("revenue", ascending=False)
+    left, right = st.columns(2)
+    with left:
+        st.markdown("**Top products by revenue**")
+        st.dataframe(product_perf.head(5).rename(columns={
+            "product": "Product", "category": "Category", "units": "Units",
+            "revenue": "Revenue", "gross_profit": "Gross profit"
+        }), use_container_width=True)
+    with right:
+        st.markdown("**Lowest recorded sales by units**")
+        st.dataframe(product_perf.sort_values("units").head(5).rename(columns={
+            "product": "Product", "category": "Category", "units": "Units",
+            "revenue": "Revenue", "gross_profit": "Gross profit"
+        }), use_container_width=True)
+
+    st.markdown("### Department analysis")
+    department_map = {
+        "Men": ["Men", "Mens", "Men's", "Male", "Мужской", "Мужская"],
+        "Women": ["Women", "Womens", "Women's", "Female", "Женский", "Женская"],
+        "Kids": ["Kids", "Children", "Child", "Детский", "Детская"]
+    }
+    categories = df["category"].astype(str).str.strip()
+    department_rows = []
+    for department, labels in department_map.items():
+        mask = categories.str.casefold().isin([x.casefold() for x in labels])
+        department_rows.append({
+            "Department": department,
+            "Units sold": df.loc[mask, "units_sold"].sum(),
+            "Revenue": df.loc[mask, "revenue"].sum()
+        })
+    dept_df = pd.DataFrame(department_rows)
+    if dept_df[["Units sold", "Revenue"]].to_numpy().sum() > 0:
+        st.plotly_chart(px.bar(dept_df, x="Department", y="Revenue",
+                               title="Revenue by recognised department labels"),
+                        use_container_width=True)
+    else:
+        st.info(
+            "Department split is not available for the current dataset because its category labels "
+            "do not identify Men, Women or Kids. Use these labels in the category column to enable this view."
+        )
+
+    st.download_button(
+        "Download sales analysis (CSV)",
+        data=product_perf.to_csv(index=False).encode("utf-8-sig"),
+        file_name="smartshelf_sales_analysis.csv",
+        mime="text/csv"
+    )
+    st.warning(
+        "Comparison is between the latest and previous recorded dates in the dataset, not necessarily today and yesterday. "
+        "A true week-over-week comparison requires matching date ranges and enough historical data."
+    )
+
+
+with tab9:
+    st.subheader("SMARTSHELF AI Assistant")
+    st.caption("Ask questions about sales, products, inventory and profitability in the currently loaded dataset.")
+
+    product_summary = df.groupby(["product", "category"], as_index=False).agg(
+        units=("units_sold", "sum"), revenue=("revenue", "sum"),
+        gross_profit=("gross_profit", "sum")
+    )
+    category_summary = df.groupby("category", as_index=False).agg(
+        units=("units_sold", "sum"), revenue=("revenue", "sum"),
+        gross_profit=("gross_profit", "sum")
+    )
+    size_summary = df.groupby("size", as_index=False)["units_sold"].sum()
+    color_summary = df.groupby("color", as_index=False)["units_sold"].sum()
+
+    latest_stock_rows = df.sort_values("date").groupby(
+        ["product", "category", "size", "color"], as_index=False
+    ).tail(1)
+    variant_summary = df.groupby(["product", "category", "size", "color"], as_index=False).agg(
+        units=("units_sold", "sum"),
+        observed_days=("date", lambda x: max(x.dt.date.nunique(), 1))
+    ).merge(
+        latest_stock_rows[["product", "category", "size", "color", "stock"]],
+        on=["product", "category", "size", "color"], how="left"
+    )
+    variant_summary["daily_rate"] = variant_summary["units"] / variant_summary["observed_days"]
+    variant_summary["stock_cover_days"] = np.where(
+        variant_summary["daily_rate"] > 0,
+        variant_summary["stock"] / variant_summary["daily_rate"], np.inf
+    )
+
+    def answer_business_question(question):
+        q = question.lower().strip()
+        if not q:
+            return "Enter a question to get an answer based on the current dataset."
+        if any(k in q for k in ["profit", "прибыл", "margin", "марж", "most profitable"]):
+            r = product_summary.sort_values("gross_profit", ascending=False).iloc[0]
+            margin = r["gross_profit"] / r["revenue"] * 100 if r["revenue"] else 0
+            return (f"**Most profitable product:** {r['product']} ({r['category']}). "
+                    f"Gross profit: **{r['gross_profit']:,.0f}**; revenue: **{r['revenue']:,.0f}**; "
+                    f"gross margin: **{margin:.1f}%**. Gross profit excludes operating expenses.")
+        if any(k in q for k in ["reorder", "restock", "закуп", "пополн", "заказать", "stock", "остат"]):
+            needs = variant_summary[
+                (variant_summary["daily_rate"] > 0) &
+                (variant_summary["stock_cover_days"] <= lead_time)
+            ].sort_values("stock_cover_days")
+            if needs.empty:
+                return (f"No variant is below the selected supplier lead-time threshold of **{lead_time} days** "
+                        "based on this sample. This is an estimate, not a purchase order.")
+            lines = [f"- **{r.product}** — size {r.size}, colour {r.color}: about "
+                     f"{r.stock_cover_days:.1f} days of stock cover."
+                     for r in needs.head(5).itertuples()]
+            return "**Variants to review first:**\n\n" + "\n".join(lines) + \
+                   "\n\nCheck physical stock and incoming deliveries before ordering."
+        if any(k in q for k in ["category", "категор", "department", "отдел"]):
+            r = category_summary.sort_values("revenue", ascending=False).iloc[0]
+            return (f"**Leading category by revenue:** {r['category']} — revenue **{r['revenue']:,.0f}**, "
+                    f"{r['units']:,.0f} units sold and gross profit **{r['gross_profit']:,.0f}**.")
+        if any(k in q for k in ["size", "размер"]):
+            r = size_summary.sort_values("units_sold", ascending=False).iloc[0]
+            return f"**Most demanded size:** {r['size']} with **{r['units_sold']:,.0f} units sold**."
+        if any(k in q for k in ["color", "colour", "цвет"]):
+            r = color_summary.sort_values("units_sold", ascending=False).iloc[0]
+            return f"**Leading colour:** {r['color']} with **{r['units_sold']:,.0f} units sold**."
+        if any(k in q for k in ["sales", "revenue", "выруч", "продаж"]):
+            best = product_summary.sort_values("revenue", ascending=False).iloc[0]
+            return (f"Total recorded revenue is **{total_revenue:,.0f}** across **{units:,.0f} units**. "
+                    f"Leading product by revenue: **{best['product']}** ({best['revenue']:,.0f}).")
+        if any(k in q for k in ["help", "помощ", "what can", "что ты"]):
+            return ("I can answer about sales/revenue, most profitable product, leading category, "
+                    "popular size or colour, and variants to review for replenishment.")
+        return ("I couldn't match that question to a supported analysis. Try asking about sales, revenue, "
+                "profit, category, size, colour, or replenishment.")
+
+    examples = [
+        "Which product generates the most profit?",
+        "What should I reorder?",
+        "Which category has the highest revenue?",
+        "What is the most popular size?",
+        "Какие цвета продаются лучше?"
+    ]
+    st.markdown("**Try a question:**")
+    selected_example = st.selectbox("Example questions", ["Choose an example..."] + examples)
+    question = st.text_input(
+        "Your question",
+        value="" if selected_example == "Choose an example..." else selected_example,
+        placeholder="e.g. Which product generates the most profit?"
+    )
+    if st.button("Ask SMARTSHELF", type="primary"):
+        st.markdown("### Answer")
+        st.markdown(answer_business_question(question))
+
+    st.info(
+        "Transparency and privacy: this prototype answers using predefined rules and calculations from the loaded data. "
+        "It is not a connected generative-AI model and does not send data to an external AI service. "
+        "Answers are limited to supported question types and the quality of the uploaded data."
+    )
 
 with st.expander("Data preview and definitions"):
     st.dataframe(df, use_container_width=True)

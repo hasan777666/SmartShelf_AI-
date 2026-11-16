@@ -180,18 +180,89 @@ with tab5:
     )
     st.warning("Demo limitation: recommendations are estimates from the sample sales history and the latest recorded stock. Validate with real inventory, supplier schedules and store context before ordering.")
 
+
 with tab6:
-    st.subheader("Business Advisor")
-    best = df.groupby("category")["units_sold"].sum().sort_values(ascending=False)
-    if len(best):
-        st.write(f"**Top category by units sold:** {best.index[0]} ({best.iloc[0]:,.0f} units).")
-    top_size = df.groupby("size")["units_sold"].sum().sort_values(ascending=False)
-    if len(top_size):
-        st.write(f"**Most demanded size in this dataset:** {top_size.index[0]}.")
-    top_color = df.groupby("color")["units_sold"].sum().sort_values(ascending=False)
-    if len(top_color):
-        st.write(f"**Most demanded color in this dataset:** {top_color.index[0]}.")
-    st.info("These are descriptive insights from the uploaded dataset, not guarantees about future demand.")
+    st.subheader("AI Business Advisor")
+    st.caption("Decision-support recommendations generated from the uploaded sales and stock data.")
+
+    category_sales = df.groupby("category", as_index=False).agg(
+        units=("units_sold", "sum"), revenue=("revenue", "sum")
+    ).sort_values("units", ascending=False)
+    size_sales = df.groupby("size", as_index=False)["units_sold"].sum().sort_values("units_sold", ascending=False)
+    color_sales = df.groupby("color", as_index=False)["units_sold"].sum().sort_values("units_sold", ascending=False)
+    product_sales = df.groupby(["product", "category"], as_index=False).agg(
+        units=("units_sold", "sum"), revenue=("revenue", "sum")
+    ).sort_values("units", ascending=False)
+
+    latest_stock = df.sort_values("date").groupby(
+        ["product", "category", "size", "color"], as_index=False
+    ).tail(1)
+    variant_sales = df.groupby(["product", "category", "size", "color"], as_index=False).agg(
+        units=("units_sold", "sum"),
+        observed_days=("date", lambda x: max(x.dt.date.nunique(), 1))
+    )
+    inventory = variant_sales.merge(
+        latest_stock[["product", "category", "size", "color", "stock"]],
+        on=["product", "category", "size", "color"], how="left"
+    )
+    inventory["daily_rate"] = inventory["units"] / inventory["observed_days"]
+    inventory["stock_days"] = np.where(
+        inventory["daily_rate"] > 0, inventory["stock"] / inventory["daily_rate"], np.inf
+    )
+
+    k1, k2, k3 = st.columns(3)
+    k1.metric("Categories analysed", int(df["category"].nunique()))
+    k2.metric("Product variants", int(len(inventory)))
+    k3.metric("Observed sales days", int(days))
+
+    st.markdown("### Business recommendations")
+    recommendations = []
+    if len(category_sales):
+        r = category_sales.iloc[0]
+        recommendations.append(
+            f"**Prioritise {r['category']} for attention.** It leads this dataset with {r['units']:,.0f} units sold and revenue of {r['revenue']:,.0f}."
+        )
+    if len(size_sales):
+        r = size_sales.iloc[0]
+        recommendations.append(
+            f"**Review size allocation.** Size {r['size']} has the highest recorded demand ({r['units_sold']:,.0f} units). Compare its stock availability with other sizes."
+        )
+    if len(color_sales):
+        r = color_sales.iloc[0]
+        recommendations.append(
+            f"**Review colour allocation.** {r['color']} is the leading colour in this sample ({r['units_sold']:,.0f} units sold)."
+        )
+    low_cover = inventory[(inventory["daily_rate"] > 0) & (inventory["stock_days"] <= lead_time)]
+    if len(low_cover):
+        urgent = low_cover.sort_values("stock_days").head(3)
+        names = ", ".join(f"{r.product} ({r.size}/{r.color})" for r in urgent.itertuples())
+        recommendations.append(
+            f"**Check low-stock variants first.** Estimated stock cover is at or below the {lead_time}-day supplier lead time for: {names}."
+        )
+    else:
+        recommendations.append("**No urgent stock-cover signal was found** using the current lead-time setting. Continue monitoring sales and stock.")
+    if len(product_sales) > 1:
+        r = product_sales.sort_values("units").iloc[0]
+        recommendations.append(
+            f"**Review slower-moving product {r['product']}.** It has the lowest recorded unit sales ({r['units']:,.0f}) in this sample. Check pricing, visibility and seasonality before making changes."
+        )
+    for i, item in enumerate(recommendations, 1):
+        st.markdown(f"{i}. {item}")
+
+    st.markdown("### Explore the data")
+    left, right = st.columns(2)
+    with left:
+        st.plotly_chart(px.bar(category_sales, x="category", y="units", title="Demand by category"), use_container_width=True)
+        st.plotly_chart(px.bar(size_sales, x="size", y="units_sold", title="Demand by size"), use_container_width=True)
+    with right:
+        st.plotly_chart(px.bar(product_sales.head(8), x="product", y="units", title="Top products by units sold"), use_container_width=True)
+        st.plotly_chart(px.bar(color_sales, x="color", y="units_sold", title="Demand by colour"), use_container_width=True)
+
+    st.info(
+        "Transparency note: this advisor uses transparent business rules and descriptive statistics, "
+        "not a connected generative-AI model or a trained machine-learning model. The included sample data is synthetic. "
+        "Treat recommendations as prompts for review, not automatic purchasing decisions."
+    )
 
 with st.expander("Data preview and definitions"):
     st.dataframe(df, use_container_width=True)
